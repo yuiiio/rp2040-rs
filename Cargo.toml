@@ -1,0 +1,20 @@
+[package]
+name = "rp2040-rs"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cortex-m = "0.7.7"
+usb-device= "0.2.9"
+usbd-serial = "0.1.1"
+usbd-hid = "0.6.1"
+
+panic-halt = "0.2.0"
+embedded-time = "0.12.1"
+rp2040-boot2 = "0.3.0"
+rp2040-hal = { git = "https://github.com/rp-rs/rp-hal.git", features = ["critical-section-impl"] }
+embedded-hal = { version = "0.2.7", features = ["unproven"] }
+cortex-m-rt = { version = "0.7.3"}
