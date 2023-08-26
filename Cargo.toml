@@ -15,6 +15,7 @@ usbd-hid = "0.6.1"
 panic-halt = "0.2.0"
 embedded-time = "0.12.1"
 rp2040-boot2 = "0.3.0"
-rp2040-hal = { git = "https://github.com/rp-rs/rp-hal.git", features = ["critical-section-impl"] }
+rp2040-hal = { git = "https://github.com/rp-rs/rp-hal.git", features = ["critical-section-impl", "rt"] }
 embedded-hal = { version = "0.2.7", features = ["unproven"] }
 cortex-m-rt = { version = "0.7.3"}
+critical-section = "1.1.2"

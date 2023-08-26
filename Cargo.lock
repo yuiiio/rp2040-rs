@@ -385,6 +385,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12d9d8375815f543f54835d01160d4e47f9e2cae75f17ff8f1ec19ce1da96e4c"
 dependencies = [
  "cortex-m",
+ "cortex-m-rt",
  "critical-section",
  "vcell",
 ]
@@ -395,6 +396,7 @@ version = "0.1.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
+ "critical-section",
  "embedded-hal",
  "embedded-time",
  "panic-halt",
