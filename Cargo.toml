@@ -10,7 +10,7 @@ license = "GPL-3.0"
 cortex-m = "0.7.7"
 usb-device= "0.2.9"
 usbd-serial = "0.1.1"
-usbd-hid = "0.6.1"
+usbd-human-interface-device = "0.4.3"
 
 panic-halt = "0.2.0"
 embedded-time = "0.12.1"
@@ -19,3 +19,5 @@ rp2040-hal = { git = "https://github.com/rp-rs/rp-hal.git", features = ["critica
 embedded-hal = { version = "0.2.7", features = ["unproven"] }
 cortex-m-rt = { version = "0.7.3"}
 critical-section = "1.1.2"
+
+frunk = { version = "0.4", default-features = false }

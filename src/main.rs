@@ -28,9 +28,11 @@ use hal::prelude::*;
 
 use usb_device::bus::UsbBusAllocator;
 use usb_device::prelude::*;
-use usbd_hid::descriptor::generator_prelude::*;
-use usbd_hid::descriptor::MouseReport;
-use usbd_hid::hid_class::HIDClass;
+use usbd_human_interface_device::device::joystick::{JoystickReport, Joystick};
+use usbd_human_interface_device::usb_class::UsbHidClass;
+use usbd_human_interface_device::prelude::*;
+
+use frunk::{HCons, HNil};
 
 /// The USB Device Driver (shared with the interrupt).
 static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
@@ -39,8 +41,7 @@ static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
 static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
 
 /// The USB Human Interface Device Driver (shared with the interrupt).
-static mut USB_HID: Option<HIDClass<hal::usb::UsbBus>> = None;
-
+static mut USB_HID_JOY: Option<UsbHidClass<hal::usb::UsbBus, HCons<Joystick<hal::usb::UsbBus>, HNil>>> = None;
 
 /// The linker will place this boot block at the start of our program image. We
 /// need this to help the ROM bootloader get our code up and running.
@@ -100,19 +101,19 @@ fn main() -> ! {
     // reference exists!
     let bus_ref = unsafe { USB_BUS.as_ref().unwrap() };
 
-    // Set up the USB HID Class Device driver, providing Mouse Reports
-    let usb_hid = HIDClass::new(bus_ref, MouseReport::desc(), 60);
+    let usb_hid_joy = UsbHidClassBuilder::new()
+        .add_device(usbd_human_interface_device::device::joystick::JoystickConfig::default())
+        .build(bus_ref);
     unsafe {
-        // Note (safety): This is safe as interrupts haven't been started yet.
-        USB_HID = Some(usb_hid);
+        // Note (safety): This is safe as interrupts haven't been started yet
+        USB_HID_JOY = Some(usb_hid_joy);
     }
 
-    // Create a USB device with a fake VID and PID
-    let usb_dev = UsbDeviceBuilder::new(bus_ref, UsbVidPid(0x16c0, 0x27da))
-        .manufacturer("Fake company")
-        .product("Twitchy Mousey")
+    //https://pid.codes
+    let usb_dev = UsbDeviceBuilder::new(bus_ref, UsbVidPid(0x1209, 0x0001))
+        .manufacturer("usbd-human-interface-device")
+        .product("Rusty joystick")
         .serial_number("TEST")
-        .device_class(0)
         .build();
     unsafe {
         // Note (safety): This is safe as interrupts haven't been started yet
@@ -143,39 +144,36 @@ fn main() -> ! {
     // Move the cursor up and down every 200ms
     loop {
         led_pin.set_high().unwrap();
-        delay.delay_ms(100);
+        delay.delay_ms(500);
 
-        let rep_up = MouseReport {
-            x: 0,
-            y: 4,
-            buttons: 0,
-            wheel: 0,
-            pan: 0,
+        let x = 0;
+        let y = 0;
+        
+        let buttons = 0b00000001;
+        let push_a =  JoystickReport {
+            buttons, x, y,
         };
-        push_mouse_movement(rep_up).ok().unwrap_or(0);
+        push_gamepad_input(push_a).ok().unwrap_or(());
 
         led_pin.set_low().unwrap();
-        delay.delay_ms(100);
+        delay.delay_ms(500);
 
-        let rep_down = MouseReport {
-            x: 0,
-            y: -4,
-            buttons: 0,
-            wheel: 0,
-            pan: 0,
+        let buttons = 0b00000000;
+        let normal_state =  JoystickReport {
+            buttons, x, y,
         };
-        push_mouse_movement(rep_down).ok().unwrap_or(0);
+        push_gamepad_input(normal_state).ok().unwrap_or(());
     }
 }
 
-/// Submit a new mouse movement report to the USB stack.
+/// Submit a new gamepad inpuit report to the USB stack.
 ///
 /// We do this with interrupts disabled, to avoid a race hazard with the USB IRQ.
-fn push_mouse_movement(report: MouseReport) -> Result<usize, usb_device::UsbError> {
+fn push_gamepad_input(report: JoystickReport) -> Result<(), UsbHidError> {
     critical_section::with(|_| unsafe {
         // Now interrupts are disabled, grab the global variable and, if
         // available, send it a HID report
-        USB_HID.as_mut().map(|hid| hid.push_input(&report))
+        USB_HID_JOY.as_mut().map(|hid_joy| hid_joy.device().write_report(&report))
     })
     .unwrap()
 }
@@ -187,8 +185,8 @@ fn push_mouse_movement(report: MouseReport) -> Result<usize, usb_device::UsbErro
 unsafe fn USBCTRL_IRQ() {
     // Handle USB request
     let usb_dev = USB_DEVICE.as_mut().unwrap();
-    let usb_hid = USB_HID.as_mut().unwrap();
-    usb_dev.poll(&mut [usb_hid]);
+    let usb_hid_joy = USB_HID_JOY.as_mut().unwrap();
+    usb_dev.poll(&mut [usb_hid_joy]);
 }
 
 // End of file
