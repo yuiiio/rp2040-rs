@@ -10,7 +10,8 @@ license = "GPL-3.0"
 cortex-m = "0.7.7"
 usb-device= "0.2.9"
 usbd-serial = "0.1.1"
-usbd-human-interface-device = "0.4.3"
+# usbd-human-interface-device = "0.4.3"
+usbd-human-interface-device = { path = "../usbd-human-interface-device" }
 
 panic-halt = "0.2.0"
 embedded-time = "0.12.1"

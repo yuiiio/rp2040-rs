@@ -55,6 +55,11 @@ pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GENERIC_03H;
 /// if your board has a different frequency
 const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 
+const DPAD_UP:u8 = 0b00000001;
+const DPAD_DOWN:u8 = 0b00000101;
+const DPAD_RIGHT:u8 = 0b00000011;
+const DPAD_LEFT:u8 = 0b00000111;
+
 /// Entry point to our bare-metal application.
 ///
 /// The `#[rp2040_hal::entry]` macro ensures the Cortex-M start-up code calls this function
@@ -146,23 +151,33 @@ fn main() -> ! {
         led_pin.set_high().unwrap();
         delay.delay_ms(500);
 
-        let x = 0;
-        let y = 0;
-        
-        let buttons = 0b00000001;
-        let push_a =  JoystickReport {
-            buttons, x, y,
+        let mut report = JoystickReport {
+            lx: 128,
+            ly: 128,
+            rx: 128,
+            ry: 128,
+            lz: 0,
+            rz: 0,
+            buttons: 0b00000000,
+            hat_switch: 0b00000000,
         };
-        push_gamepad_input(push_a).ok().unwrap_or(());
+
+        report.lx = 0;
+        report.ry = 255;
+        report.buttons = 0b00000001;
+        report.hat_switch = DPAD_DOWN;
+
+        push_gamepad_input(report).ok().unwrap_or(());
 
         led_pin.set_low().unwrap();
         delay.delay_ms(500);
 
-        let buttons = 0b00000000;
-        let normal_state =  JoystickReport {
-            buttons, x, y,
-        };
-        push_gamepad_input(normal_state).ok().unwrap_or(());
+        report.lx = 255;
+        report.ry = 0;
+        report.buttons = 0b00000000;
+        report.hat_switch = 0b00000000;
+
+        push_gamepad_input(report).ok().unwrap_or(());
     }
 }
 
