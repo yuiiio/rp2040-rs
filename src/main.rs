@@ -55,10 +55,10 @@ pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GENERIC_03H;
 /// if your board has a different frequency
 const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 
-const DPAD_UP:u8 = 0b00000001;
-const DPAD_DOWN:u8 = 0b00000101;
-const DPAD_RIGHT:u8 = 0b00000011;
-const DPAD_LEFT:u8 = 0b00000111;
+const DPAD_UP: [bool; 4]= [false, false, false, true];
+const DPAD_DOWN: [bool; 4]= [false, true, false, true];
+const DPAD_RIGHT: [bool; 4]= [false, false, true, true];
+const DPAD_LEFT: [bool; 4]= [false, true, true, true];
 
 /// Entry point to our bare-metal application.
 ///
@@ -119,6 +119,7 @@ fn main() -> ! {
         .manufacturer("usbd-human-interface-device")
         .product("Rusty joystick")
         .serial_number("TEST")
+        .max_packet_size_0(8)
         .build();
     unsafe {
         // Note (safety): This is safe as interrupts haven't been started yet
@@ -158,14 +159,16 @@ fn main() -> ! {
             ry: 128,
             lz: 0,
             rz: 0,
-            buttons: 0b00000000,
-            hat_switch: 0b00000000,
+            buttons1: 0b00000000,
+            buttons2: [false; 4],
+            hat_switch: [false; 4],
         };
 
         report.lx = 0;
         report.ry = 255;
-        report.buttons = 0b00000001;
-        report.hat_switch = DPAD_DOWN;
+        report.buttons1 = 0b00000001;
+        report.buttons2 = [true, true, true, true];
+        report.hat_switch = DPAD_RIGHT;
 
         push_gamepad_input(report).ok().unwrap_or(());
 
@@ -174,8 +177,9 @@ fn main() -> ! {
 
         report.lx = 255;
         report.ry = 0;
-        report.buttons = 0b00000000;
-        report.hat_switch = 0b00000000;
+        report.buttons1 = 0b00000000;
+        report.buttons2 = [false, false, false, false];
+        report.hat_switch = DPAD_LEFT;
 
         push_gamepad_input(report).ok().unwrap_or(());
     }
