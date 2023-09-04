@@ -22,6 +22,7 @@ use hal::pac;
 use hal::pac::interrupt;
 
 // Some traits we need
+use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
 
 use hal::prelude::*;
@@ -144,45 +145,106 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
 
+    // Enable ADC
+    let mut adc = hal::Adc::new(pac.ADC, &mut pac.RESETS);
+
+    // Configure GPIO{26, 27, 28, 29} as an ADC input
+    let mut adc_pin_0 = hal::adc::AdcPin::new(pins.gpio26.into_floating_input());
+    let mut adc_pin_1 = hal::adc::AdcPin::new(pins.gpio27.into_floating_input());
+    let mut adc_pin_2 = hal::adc::AdcPin::new(pins.gpio28.into_floating_input());
+    let mut adc_pin_3 = hal::adc::AdcPin::new(pins.gpio29.into_floating_input());
+    
+    // Configure free-running mode:
+    let mut adc_fifo = adc
+        .build_fifo()
+        // Set clock divider to target a sample rate of 1000 samples per second (1ksps).
+        // The value was calculated by `(48MHz / 1ksps) - 1 = 47999.0`.
+        // Please check the `clock_divider` method documentation for details.
+        //.clock_divider(47999, 0)
+        .clock_divider(0, 0) // default 48MHz / 96 = 500ksps
+        .set_channel(&mut adc_pin_0)
+        // then alternate between GPIO26 and the temperature sensor
+        .round_robin((&mut adc_pin_3, &mut adc_pin_2, &mut adc_pin_1, &mut adc_pin_0))
+        // Uncomment this line to produce 8-bit samples, instead of 12 bit (lower bits are discarded)
+        .shift_8bit()
+        // start sampling
+        .start();
+
+    // Configure GPIO [8 ~ 23] as an input
+    let in_pin_r3 = pins.gpio8.into_pull_up_input();
+    let in_pin_l3 = pins.gpio9.into_pull_up_input();
+    let in_pin_menu = pins.gpio10.into_pull_up_input();
+    let in_pin_overview = pins.gpio11.into_pull_up_input();
+    let in_pin_d_down = pins.gpio12.into_pull_up_input();
+    let in_pin_d_left = pins.gpio13.into_pull_up_input();
+    let in_pin_d_right = pins.gpio14.into_pull_up_input();
+    let in_pin_d_up = pins.gpio15.into_pull_up_input();
+    let in_pin_lt = pins.gpio16.into_pull_up_input();
+    let in_pin_lz = pins.gpio17.into_pull_up_input();
+    let in_pin_rz = pins.gpio18.into_pull_up_input();
+    let in_pin_rt = pins.gpio19.into_pull_up_input();
+    let in_pin_y = pins.gpio20.into_pull_up_input();
+    let in_pin_x = pins.gpio21.into_pull_up_input();
+    let in_pin_b = pins.gpio22.into_pull_up_input();
+    let in_pin_a = pins.gpio23.into_pull_up_input();
+
     // Configure GPIO25 as an output
     let mut led_pin = pins.gpio25.into_push_pull_output();
     
     // Move the cursor up and down every 200ms
     loop {
-        led_pin.set_high().unwrap();
-        delay.delay_ms(500);
+        led_pin.set_low().unwrap();
 
-        let mut report = JoystickReport {
-            lx: 128,
-            ly: 128,
-            rx: 128,
-            ry: 128,
-            lz: 0,
-            rz: 0,
-            buttons1: 0b00000000, // high [menu, overview, RT, LT, Y, X, B, A] low
+        // busy-wait until the FIFO contains at least 4 samples:
+        while adc_fifo.len() < 4 {}
+
+        led_pin.set_high().unwrap();
+
+        // fetch 4 values from the fifo
+        let adc_result_3 = adc_fifo.read();
+        let adc_result_2 = adc_fifo.read();
+        let adc_result_1 = adc_fifo.read();
+        let adc_result_0 = adc_fifo.read();
+
+        let lx = adc_result_3;
+        let ly = adc_result_2;
+        let rx = adc_result_1;
+        let ry = adc_result_0;
+
+        let mut buttons1 = 0b00000000;
+
+        if in_pin_a.is_low().unwrap() {
+            buttons1 |= 0b00000001;
+        }
+        if in_pin_b.is_low().unwrap() {
+            buttons1 |= 0b00000010;
+        }
+        if in_pin_x.is_low().unwrap() {
+            buttons1 |= 0b00000100;
+        }
+        if in_pin_y.is_low().unwrap() {
+            buttons1 |= 0b00001000;
+        }
+        //report.buttons2 = [true, true, true, true];
+        //report.hat_switch = DPAD_RIGHT;
+
+        let report = JoystickReport {
+            lx: lx,
+            ly: ly,
+            rx: rx,
+            ry: ry,
+            lz: 0, // 0~255 expect analog trigger but, rp2040 has only 4 analogin so 
+            rz: 0, // use binary value 0, 1 and map to 0 , 255.
+            buttons1: buttons1, // high [menu, overview, RT, LT, Y, X, B, A] low
             buttons2: [false; 4], // high [?, R3, L3, ?] low
             hat_switch: [false; 4], // see DPAD_*
         };
 
-        report.lx = 0;
-        report.ry = 255;
-        report.buttons1 = 0b00000001;
-        report.buttons2 = [true, true, true, true];
-        report.hat_switch = DPAD_RIGHT;
-
-        push_gamepad_input(report).ok().unwrap_or(());
-
-        led_pin.set_low().unwrap();
-        delay.delay_ms(500);
-
-        report.lx = 255;
-        report.ry = 0;
-        report.buttons1 = 0b00000000;
-        report.buttons2 = [false, false, false, false];
-        report.hat_switch = DPAD_LEFT;
-
         push_gamepad_input(report).ok().unwrap_or(());
     }
+    
+    // Stop free-running mode (the returned `adc` can be reused for future captures)
+    // let _adc = adc_fifo.stop();
 }
 
 /// Submit a new gamepad inpuit report to the USB stack.
