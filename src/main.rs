@@ -119,7 +119,7 @@ fn main() -> ! {
         .manufacturer("usbd-human-interface-device")
         .product("Rusty joystick")
         .serial_number("TEST")
-        .max_packet_size_0(8)
+        .max_packet_size_0(8) // should change 16, 32,, when over report size over 8 byte ?
         .build();
     unsafe {
         // Note (safety): This is safe as interrupts haven't been started yet
@@ -159,9 +159,9 @@ fn main() -> ! {
             ry: 128,
             lz: 0,
             rz: 0,
-            buttons1: 0b00000000,
-            buttons2: [false; 4],
-            hat_switch: [false; 4],
+            buttons1: 0b00000000, // high [menu, overview, RT, LT, Y, X, B, A] low
+            buttons2: [false; 4], // high [?, R3, L3, ?] low
+            hat_switch: [false; 4], // see DPAD_*
         };
 
         report.lx = 0;
