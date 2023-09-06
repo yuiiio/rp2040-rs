@@ -56,10 +56,16 @@ pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GENERIC_03H;
 /// if your board has a different frequency
 const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 
+// DPAD 1~8 axis clock wise from up.
 const DPAD_UP: [bool; 4]= [false, false, false, true];
 const DPAD_DOWN: [bool; 4]= [false, true, false, true];
 const DPAD_RIGHT: [bool; 4]= [false, false, true, true];
 const DPAD_LEFT: [bool; 4]= [false, true, true, true];
+
+const DPAD_DOWN_LEFT: [bool; 4] = [false, true, true, false];
+const DPAD_DOWN_RIGHT: [bool; 4] = [false, true, false, false];
+const DPAD_UP_RIGHT: [bool; 4] = [false, false, true, false];
+const DPAD_UP_LEFT: [bool; 4] = [true, false, false, false];
 
 /// Entry point to our bare-metal application.
 ///
@@ -221,6 +227,14 @@ fn main() -> ! {
         let rx = adc_result_1;
         let ry = adc_result_0;
 
+        let (mut lz, mut rz): (u8, u8) = (0, 0);
+        if in_pin_lz.is_low().unwrap() {
+            lz = 255;
+        }
+        if in_pin_rz.is_low().unwrap() {
+            rz = 255;
+        }
+
         let mut buttons1 = 0b00000000;
 
         if in_pin_a.is_low().unwrap() {
@@ -235,19 +249,74 @@ fn main() -> ! {
         if in_pin_y.is_low().unwrap() {
             buttons1 |= 0b00001000;
         }
-        //report.buttons2 = [true, true, true, true];
-        //report.hat_switch = DPAD_RIGHT;
+        if in_pin_lt.is_low().unwrap() {
+            buttons1 |= 0b00010000;
+        }
+        if in_pin_rt.is_low().unwrap() {
+            buttons1 |= 0b00100000;
+        }
+        if in_pin_overview.is_low().unwrap() {
+            buttons1 |= 0b01000000;
+        }
+        if in_pin_menu.is_low().unwrap() {
+            buttons1 |= 0b10000000;
+        }
+
+        let mut buttons2  = [false; 4];
+        if in_pin_l3.is_low().unwrap() {
+            buttons2[1] = true;
+        }
+        if in_pin_r3.is_low().unwrap() {
+            buttons2[2] = true;
+        }
+
+        // up and down, left and right should not press at same time
+        // hat_switch(dpad) expect only 8 axis info.
+        let hat_switch: [bool; 4] =
+            if in_pin_d_up.is_low().unwrap() {
+                if in_pin_d_right.is_low().unwrap() {
+                    DPAD_UP_RIGHT
+                } else {
+                    if in_pin_d_left.is_low().unwrap() {
+                        DPAD_UP_LEFT
+                    } else {
+                        DPAD_UP
+                    }
+                }
+            } else {
+                if in_pin_d_down.is_low().unwrap() {
+                    if in_pin_d_right.is_low().unwrap() {
+                        DPAD_DOWN_RIGHT
+                    } else {
+                        if in_pin_d_left.is_low().unwrap() {
+                            DPAD_DOWN_LEFT
+                        } else {
+                            DPAD_DOWN
+                        }
+                    }
+                } else {
+                    if in_pin_d_right.is_low().unwrap() {
+                        DPAD_RIGHT
+                    } else {
+                        if in_pin_d_left.is_low().unwrap() {
+                            DPAD_LEFT
+                        } else {
+                            [false; 4]
+                        }
+                    }
+                }
+            };
 
         let report = JoystickReport {
             lx: lx,
             ly: ly,
             rx: rx,
             ry: ry,
-            lz: 0, // 0~255 expect analog trigger but, rp2040 has only 4 analogin so 
-            rz: 0, // use binary value 0, 1 and map to 0 , 255.
+            lz: lz, // 0~255 expect analog trigger but, rp2040 has only 4 analogin so
+            rz: rz, // use binary value 0, 1 and map to 0 , 255.
             buttons1: buttons1, // high [menu, overview, RT, LT, Y, X, B, A] low
-            buttons2: [false; 4], // high [?, R3, L3, ?] low
-            hat_switch: [false; 4], // see DPAD_*
+            buttons2: buttons2, // high [?, R3, L3, ?] low
+            hat_switch: hat_switch, // see DPAD_*
         };
 
         push_gamepad_input(report).ok().unwrap_or(());
