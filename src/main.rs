@@ -154,6 +154,16 @@ fn main() -> ! {
     let mut adc_pin_2 = hal::adc::AdcPin::new(pins.gpio28.into_floating_input());
     let mut adc_pin_3 = hal::adc::AdcPin::new(pins.gpio29.into_floating_input());
     
+    // NOTE:
+    // RP2040-datasheet.pdf say 
+    // If the FIFO is full when a conversion completes, the sticky error flag FCS.OVER is set. 
+    // The current FIFO contents are not changed by this event,
+    // but any conversion that completes whilst the FIFO is full will be lost.
+    // 
+    // Is there always a two read interval delay?
+    // After a long interval the next value to read is,
+    // the next value read after a long interval is the value before that interval?
+    //
     // Configure free-running mode:
     let mut adc_fifo = adc
         .build_fifo()
@@ -162,7 +172,7 @@ fn main() -> ! {
         // Please check the `clock_divider` method documentation for details.
         //.clock_divider(47999, 0)
         .clock_divider(0, 0) // default 48MHz / 96 = 500ksps
-        .set_channel(&mut adc_pin_0)
+        //.set_channel(&mut adc_pin_0)
         // then alternate between GPIO26 and the temperature sensor
         .round_robin((&mut adc_pin_3, &mut adc_pin_2, &mut adc_pin_1, &mut adc_pin_0))
         // Uncomment this line to produce 8-bit samples, instead of 12 bit (lower bits are discarded)
