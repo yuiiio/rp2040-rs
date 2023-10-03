@@ -22,3 +22,4 @@ cortex-m-rt = { version = "0.7.3"}
 critical-section = "1.1.2"
 
 frunk = { version = "0.4", default-features = false }
+fugit = "0.3.6"

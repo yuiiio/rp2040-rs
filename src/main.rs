@@ -15,6 +15,8 @@ use panic_halt as _;
 
 // Alias for our HAL crate
 use rp2040_hal as hal;
+use fugit::RateExtU32;
+use rp2040_hal::clocks::Clock;
 
 // A shorter alias for the Peripheral Access Crate, which provides low-level
 // register access
@@ -150,6 +152,20 @@ fn main() -> ! {
         sio.gpio_bank0,
         &mut pac.RESETS,
     );
+
+    let spi_mosi = pins.gpio3.into_function::<hal::gpio::FunctionSpi>();
+    let spi_sclk = pins.gpio2.into_function::<hal::gpio::FunctionSpi>();
+    let spi = hal::spi::Spi::<_, _, _, 8>::new(pac.SPI0, (spi_mosi, spi_sclk));
+    
+    // Exchange the uninitialised SPI driver for an initialised one
+    let mut spi = spi.init(
+        &mut pac.RESETS,
+        clocks.peripheral_clock.freq(),
+        16.MHz(),
+        embedded_hal::spi::MODE_3,
+    );
+    // spi.write(&[]),is_ok()
+
 
     // Enable ADC
     let mut adc = hal::Adc::new(pac.ADC, &mut pac.RESETS);
