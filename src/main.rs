@@ -26,6 +26,7 @@ use hal::pac::interrupt;
 // Some traits we need
 use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::adc::OneShot;
 
 use hal::prelude::*;
 
@@ -176,6 +177,7 @@ fn main() -> ! {
     let mut adc_pin_2 = hal::adc::AdcPin::new(pins.gpio28.into_floating_input());
     let mut adc_pin_3 = hal::adc::AdcPin::new(pins.gpio29.into_floating_input());
     
+    /*
     // NOTE:
     // RP2040-datasheet.pdf say 
     // If the FIFO is full when a conversion completes, the sticky error flag FCS.OVER is set. 
@@ -195,12 +197,13 @@ fn main() -> ! {
         //.clock_divider(47999, 0)
         .clock_divider(0, 0) // default 48MHz / 96 = 500ksps
         //.set_channel(&mut adc_pin_0)
-        // then alternate between GPIO26 and the temperature sensor
+        // then alternate between GPIOS
         .round_robin((&mut adc_pin_3, &mut adc_pin_2, &mut adc_pin_1, &mut adc_pin_0))
         // Uncomment this line to produce 8-bit samples, instead of 12 bit (lower bits are discarded)
         .shift_8bit()
         // start sampling
         .start();
+    */
 
     // Configure GPIO as an input
     let in_pin_r3 = pins.gpio23.into_pull_up_input();
@@ -228,20 +231,25 @@ fn main() -> ! {
         led_pin.set_low().unwrap();
 
         // busy-wait until the FIFO contains at least 4 samples:
-        while adc_fifo.len() < 4 {}
+        // while adc_fifo.len() < 4 {}
 
         led_pin.set_high().unwrap();
 
         // fetch 4 values from the fifo
-        let adc_result_3 = adc_fifo.read();
-        let adc_result_2 = adc_fifo.read();
-        let adc_result_1 = adc_fifo.read();
-        let adc_result_0 = adc_fifo.read();
+        // let adc_result_3 = adc_fifo.read();
+        // let adc_result_2 = adc_fifo.read();
+        // let adc_result_1 = adc_fifo.read();
+        // let adc_result_0 = adc_fifo.read();
+        
+        let adc_result_3: u16 = adc.read(&mut adc_pin_3).unwrap();
+        let adc_result_2: u16 = adc.read(&mut adc_pin_2).unwrap();
+        let adc_result_1: u16 = adc.read(&mut adc_pin_1).unwrap();
+        let adc_result_0: u16 = adc.read(&mut adc_pin_0).unwrap();
 
-        let lx = adc_result_3;
-        let ly = adc_result_2;
-        let rx = adc_result_1;
-        let ry = adc_result_0;
+        let lx: u8 = (adc_result_0 >> 4) as u8;
+        let ly: u8 = (adc_result_1 >> 4) as u8;
+        let rx: u8 = (adc_result_2 >> 4) as u8;
+        let ry: u8 = (adc_result_3 >> 4) as u8;
 
         let (mut lz, mut rz): (u8, u8) = (0, 0);
         if in_pin_lz.is_low().unwrap() {
