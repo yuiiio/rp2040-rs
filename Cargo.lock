@@ -506,6 +506,7 @@ dependencies = [
  "embedded-hal",
  "embedded-time",
  "frunk",
+ "fugit",
  "panic-halt",
  "rp2040-boot2",
  "rp2040-hal",

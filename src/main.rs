@@ -203,18 +203,18 @@ fn main() -> ! {
         .start();
 
     // Configure GPIO as an input
-    let in_pin_r3 = pins.gpio24.into_pull_up_input();
-    let in_pin_l3 = pins.gpio23.into_pull_up_input();
-    let in_pin_menu = pins.gpio6.into_pull_up_input();
-    let in_pin_overview = pins.gpio7.into_pull_up_input();
+    let in_pin_r3 = pins.gpio23.into_pull_up_input();
+    let in_pin_l3 = pins.gpio24.into_pull_up_input();
+    let in_pin_menu = pins.gpio7.into_pull_up_input();
+    let in_pin_overview = pins.gpio6.into_pull_up_input();
     let in_pin_d_down = pins.gpio18.into_pull_up_input();
     let in_pin_d_left = pins.gpio20.into_pull_up_input();
     let in_pin_d_right = pins.gpio19.into_pull_up_input();
     let in_pin_d_up = pins.gpio21.into_pull_up_input();
     let in_pin_lt = pins.gpio16.into_pull_up_input();
-    let in_pin_lz = pins.gpio17.into_pull_up_input();
-    let in_pin_rz = pins.gpio22.into_pull_up_input();
-    let in_pin_rt = pins.gpio9.into_pull_up_input();
+    let in_pin_lz = pins.gpio22.into_pull_up_input();
+    let in_pin_rz = pins.gpio9.into_pull_up_input();
+    let in_pin_rt = pins.gpio17.into_pull_up_input();
     let in_pin_y = pins.gpio15.into_pull_up_input();
     let in_pin_x = pins.gpio14.into_pull_up_input();
     let in_pin_b = pins.gpio13.into_pull_up_input();
@@ -238,10 +238,10 @@ fn main() -> ! {
         let adc_result_1 = adc_fifo.read();
         let adc_result_0 = adc_fifo.read();
 
-        let lx = adc_result_0;
-        let ly = adc_result_1;
-        let rx = adc_result_2;
-        let ry = adc_result_3;
+        let lx = adc_result_3;
+        let ly = adc_result_2;
+        let rx = adc_result_1;
+        let ry = adc_result_0;
 
         let (mut lz, mut rz): (u8, u8) = (0, 0);
         if in_pin_lz.is_low().unwrap() {
