@@ -246,10 +246,18 @@ fn main() -> ! {
         let adc_result_1: u16 = adc.read(&mut adc_pin_1).unwrap();
         let adc_result_0: u16 = adc.read(&mut adc_pin_0).unwrap();
 
-        let lx: u8 = (adc_result_0 >> 4) as u8;
-        let ly: u8 = (adc_result_1 >> 4) as u8;
-        let rx: u8 = (adc_result_2 >> 4) as u8;
-        let ry: u8 = (adc_result_3 >> 4) as u8;
+        // 12 bit to 9bit to 8bit
+        // norm is 127
+        let adc_0: u16 = adc_result_0 >> 3;
+        let adc_1: u16 = adc_result_1 >> 3;
+        let adc_2: u16 = adc_result_2 >> 3;
+        let adc_3: u16 = adc_result_3 >> 3;
+
+        // clamp
+        let lx: u8 = (if adc_0 >> 7 == 0 { 0 } else { if adc_0 & 0b110000000 == 0b110000000 { 255 } else { adc_0 - 127 } }) as u8;
+        let ly: u8 = (if adc_1 >> 7 == 0 { 0 } else { if adc_1 & 0b110000000 == 0b110000000 { 255 } else { adc_1 - 127 } }) as u8;
+        let rx: u8 = (if adc_2 >> 7 == 0 { 0 } else { if adc_2 & 0b110000000 == 0b110000000 { 255 } else { adc_2 - 127 } }) as u8;
+        let ry: u8 = (if adc_3 >> 7 == 0 { 0 } else { if adc_3 & 0b110000000 == 0b110000000 { 255 } else { adc_3 - 127 } }) as u8;
 
         let (mut lz, mut rz): (u8, u8) = (0, 0);
         if in_pin_lz.is_low().unwrap() {
