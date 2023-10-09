@@ -28,15 +28,190 @@ use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_hal::adc::OneShot;
 
-use hal::prelude::*;
-
 use usb_device::bus::UsbBusAllocator;
 use usb_device::prelude::*;
-use usbd_human_interface_device::device::joystick::{JoystickReport, Joystick};
-use usbd_human_interface_device::usb_class::UsbHidClass;
-use usbd_human_interface_device::prelude::*;
 
-use frunk::{HCons, HNil};
+#[allow(unused)]
+pub mod hid {
+    use usb_device::class_prelude::*;
+    use usb_device::Result;
+
+    pub const USB_CLASS_HID: u8 = 0x03;
+
+    const USB_SUBCLASS_NONE: u8 = 0x00;
+    const USB_SUBCLASS_BOOT: u8 = 0x01;
+
+    const USB_INTERFACE_NONE: u8 = 0x00;
+    const USB_INTERFACE_KEYBOARD: u8 = 0x01;
+    const USB_INTERFACE_MOUSE: u8 = 0x02;
+
+    const REQ_GET_REPORT: u8 = 0x01;
+    const REQ_GET_IDLE: u8 = 0x02;
+    const REQ_GET_PROTOCOL: u8 = 0x03;
+    const REQ_SET_REPORT: u8 = 0x09;
+    const REQ_SET_IDLE: u8 = 0x0a;
+    const REQ_SET_PROTOCOL: u8 = 0x0b;
+
+    // https://docs.microsoft.com/en-us/windows-hardware/design/component-guidelines/mouse-collection-report-descriptor
+    const REPORT_DESCR: &[u8] = &[
+        0x05, 0x01, // USAGE_PAGE (Generic Desktop)
+        0x09, 0x02, // USAGE (Mouse)
+        0xa1, 0x01, // COLLECTION (Application)
+        0x09, 0x01, //   USAGE (Pointer)
+        0xa1, 0x00, //   COLLECTION (Physical)
+        0x05, 0x09, //     USAGE_PAGE (Button)
+        0x19, 0x01, //     USAGE_MINIMUM (Button 1)
+        0x29, 0x03, //     USAGE_MAXIMUM (Button 3)
+        0x15, 0x00, //     LOGICAL_MINIMUM (0)
+        0x25, 0x01, //     LOGICAL_MAXIMUM (1)
+        0x95, 0x03, //     REPORT_COUNT (3)
+        0x75, 0x01, //     REPORT_SIZE (1)
+        0x81, 0x02, //     INPUT (Data,Var,Abs)
+        0x95, 0x01, //     REPORT_COUNT (1)
+        0x75, 0x05, //     REPORT_SIZE (5)
+        0x81, 0x03, //     INPUT (Cnst,Var,Abs)
+        0x05, 0x01, //     USAGE_PAGE (Generic Desktop)
+        0x09, 0x30, //     USAGE (X)
+        0x09, 0x31, //     USAGE (Y)
+        0x15, 0x81, //     LOGICAL_MINIMUM (-127)
+        0x25, 0x7f, //     LOGICAL_MAXIMUM (127)
+        0x75, 0x08, //     REPORT_SIZE (8)
+        0x95, 0x02, //     REPORT_COUNT (2)
+        0x81, 0x06, //     INPUT (Data,Var,Rel)
+        0xc0, //   END_COLLECTION
+        0xc0, // END_COLLECTION
+    ];
+
+    pub fn report(x: i8, y: i8) -> [u8; 3] {
+        [
+            0x00,    // button: none
+            x as u8, // x-axis
+            y as u8, // y-axis
+        ]
+    }
+
+    pub struct HIDClass<'a, B: UsbBus> {
+        report_if: InterfaceNumber,
+        report_ep: EndpointIn<'a, B>,
+    }
+
+    impl<B: UsbBus> HIDClass<'_, B> {
+        /// Creates a new HIDClass with the provided UsbBus and max_packet_size in bytes. For
+        /// full-speed devices, max_packet_size has to be one of 8, 16, 32 or 64.
+        pub fn new(alloc: &UsbBusAllocator<B>) -> HIDClass<'_, B> {
+            HIDClass {
+                report_if: alloc.interface(),
+                report_ep: alloc.interrupt(8, 10),
+            }
+        }
+
+        pub fn write(&mut self, data: &[u8]) {
+            self.report_ep.write(data).ok();
+        }
+    }
+
+    impl<B: UsbBus> UsbClass<B> for HIDClass<'_, B> {
+        fn get_configuration_descriptors(&self, writer: &mut DescriptorWriter) -> Result<()> {
+            writer.interface(
+                self.report_if,
+                USB_CLASS_HID,
+                USB_SUBCLASS_NONE,
+                USB_INTERFACE_MOUSE,
+            )?;
+
+            let descr_len: u16 = REPORT_DESCR.len() as u16;
+            writer.write(
+                0x21,
+                &[
+                    0x01,                   // bcdHID
+                    0x01,                   // bcdHID
+                    0x00,                   // bContryCode
+                    0x01,                   // bNumDescriptors
+                    0x22,                   // bDescriptorType
+                    descr_len as u8,        // wDescriptorLength
+                    (descr_len >> 8) as u8, // wDescriptorLength
+                ],
+            )?;
+
+            writer.endpoint(&self.report_ep)?;
+
+            Ok(())
+        }
+
+        fn control_in(&mut self, xfer: ControlIn<B>) {
+            let req = xfer.request();
+
+            if req.request_type == control::RequestType::Standard {
+                match (req.recipient, req.request) {
+                    (control::Recipient::Interface, control::Request::GET_DESCRIPTOR) => {
+                        let (dtype, _index) = req.descriptor_type_index();
+                        if dtype == 0x21 {
+                            // HID descriptor
+                            cortex_m::asm::bkpt();
+                            let descr_len: u16 = REPORT_DESCR.len() as u16;
+
+                            // HID descriptor
+                            let descr = &[
+                                0x09,                   // length
+                                0x21,                   // descriptor type
+                                0x01,                   // bcdHID
+                                0x01,                   // bcdHID
+                                0x00,                   // bCountryCode
+                                0x01,                   // bNumDescriptors
+                                0x22,                   // bDescriptorType
+                                descr_len as u8,        // wDescriptorLength
+                                (descr_len >> 8) as u8, // wDescriptorLength
+                            ];
+
+                            xfer.accept_with(descr).ok();
+                            return;
+                        } else if dtype == 0x22 {
+                            // Report descriptor
+                            xfer.accept_with(REPORT_DESCR).ok();
+                            return;
+                        }
+                    }
+                    _ => {
+                        return;
+                    }
+                };
+            }
+
+            if !(req.request_type == control::RequestType::Class
+                && req.recipient == control::Recipient::Interface
+                && req.index == u8::from(self.report_if) as u16)
+            {
+                return;
+            }
+
+            match req.request {
+                REQ_GET_REPORT => {
+                    // USB host requests for report
+                    // I'm not sure what should we do here, so just send empty report
+                    xfer.accept_with(&report(0, 0)).ok();
+                }
+                _ => {
+                    xfer.reject().ok();
+                }
+            }
+        }
+
+        fn control_out(&mut self, xfer: ControlOut<B>) {
+            let req = xfer.request();
+
+            if !(req.request_type == control::RequestType::Class
+                && req.recipient == control::Recipient::Interface
+                && req.index == u8::from(self.report_if) as u16)
+            {
+                return;
+            }
+
+            xfer.reject().ok();
+        }
+    }
+}
+
+use hid::HIDClass;
 
 /// The USB Device Driver (shared with the interrupt).
 static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
@@ -45,7 +220,7 @@ static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
 static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
 
 /// The USB Human Interface Device Driver (shared with the interrupt).
-static mut USB_HID_JOY: Option<UsbHidClass<hal::usb::UsbBus, HCons<Joystick<hal::usb::UsbBus>, HNil>>> = None;
+static mut USB_HID: Option<HIDClass<hal::usb::UsbBus>> = None;
 
 /// The linker will place this boot block at the start of our program image. We
 /// need this to help the ROM bootloader get our code up and running.
@@ -116,12 +291,10 @@ fn main() -> ! {
     // reference exists!
     let bus_ref = unsafe { USB_BUS.as_ref().unwrap() };
 
-    let usb_hid_joy = UsbHidClassBuilder::new()
-        .add_device(usbd_human_interface_device::device::joystick::JoystickConfig::default())
-        .build(bus_ref);
+    let usb_hid = HIDClass::new(bus_ref);
     unsafe {
         // Note (safety): This is safe as interrupts haven't been started yet
-        USB_HID_JOY = Some(usb_hid_joy);
+        USB_HID = Some(usb_hid);
     }
 
     //https://pid.codes
@@ -140,8 +313,8 @@ fn main() -> ! {
         // Enable the USB interrupt
         pac::NVIC::unmask(hal::pac::Interrupt::USBCTRL_IRQ);
     };
-    let core = pac::CorePeripherals::take().unwrap();
-    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
+    // let core = pac::CorePeripherals::take().unwrap();
+    // let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
     // The single-cycle I/O block controls our GPIO pins
     let sio = hal::Sio::new(pac.SIO);
@@ -154,6 +327,7 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
 
+    // for st7789 display
     let spi_mosi = pins.gpio3.into_function::<hal::gpio::FunctionSpi>();
     let spi_sclk = pins.gpio2.into_function::<hal::gpio::FunctionSpi>();
     let spi = hal::spi::Spi::<_, _, _, 8>::new(pac.SPI0, (spi_mosi, spi_sclk));
@@ -339,6 +513,7 @@ fn main() -> ! {
                 }
             };
 
+        /*
         let report = JoystickReport {
             lx: lx,
             ly: ly,
@@ -350,8 +525,11 @@ fn main() -> ! {
             buttons2: buttons2, // high [?, R3, L3, ?] low
             hat_switch: hat_switch, // see DPAD_*
         };
+        */
 
-        push_gamepad_input(report).ok().unwrap_or(());
+        let hid_report: [i8; 2] = [0, -10];
+        
+        push_input(hid_report);
     }
     
     // Stop free-running mode (the returned `adc` can be reused for future captures)
@@ -361,11 +539,11 @@ fn main() -> ! {
 /// Submit a new gamepad inpuit report to the USB stack.
 ///
 /// We do this with interrupts disabled, to avoid a race hazard with the USB IRQ.
-fn push_gamepad_input(report: JoystickReport) -> Result<(), UsbHidError> {
+fn push_input(report: [i8; 2]) -> () {
     critical_section::with(|_| unsafe {
         // Now interrupts are disabled, grab the global variable and, if
         // available, send it a HID report
-        USB_HID_JOY.as_mut().map(|hid_joy| hid_joy.device().write_report(&report))
+        USB_HID.as_mut().map(|hid| hid.write(&hid::report(report[0], report[1])))
     })
     .unwrap()
 }
@@ -377,8 +555,8 @@ fn push_gamepad_input(report: JoystickReport) -> Result<(), UsbHidError> {
 unsafe fn USBCTRL_IRQ() {
     // Handle USB request
     let usb_dev = USB_DEVICE.as_mut().unwrap();
-    let usb_hid_joy = USB_HID_JOY.as_mut().unwrap();
-    usb_dev.poll(&mut [usb_hid_joy]);
+    let usb_hid = USB_HID.as_mut().unwrap();
+    usb_dev.poll(&mut [usb_hid]);
 }
 
 // End of file
