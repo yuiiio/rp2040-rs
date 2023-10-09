@@ -16,12 +16,13 @@ use panic_halt as _;
 // Alias for our HAL crate
 use rp2040_hal as hal;
 use fugit::RateExtU32;
-use rp2040_hal::clocks::Clock;
+use hal::clocks::Clock;
 
 // A shorter alias for the Peripheral Access Crate, which provides low-level
 // register access
 use hal::pac;
 use hal::pac::interrupt;
+use hal::gpio::PinState;
 
 // Some traits we need
 use embedded_hal::digital::v2::InputPin;
@@ -30,6 +31,12 @@ use embedded_hal::adc::OneShot;
 
 use usb_device::bus::UsbBusAllocator;
 use usb_device::prelude::*;
+
+use display_interface_spi::SPIInterfaceNoCS;
+use embedded_graphics::image::*;
+use embedded_graphics::pixelcolor::Rgb565;
+use embedded_graphics::prelude::*;
+use st7789::{Orientation, ST7789};
 
 #[allow(unused)]
 pub mod xinput {
@@ -361,8 +368,9 @@ fn main() -> ! {
         // Enable the USB interrupt
         pac::NVIC::unmask(hal::pac::Interrupt::USBCTRL_IRQ);
     };
-    // let core = pac::CorePeripherals::take().unwrap();
-    // let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
+
+    let core = pac::CorePeripherals::take().unwrap();
+    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
     // The single-cycle I/O block controls our GPIO pins
     let sio = hal::Sio::new(pac.SIO);
@@ -376,19 +384,38 @@ fn main() -> ! {
     );
 
     // for st7789 display
+    let rst = pins.gpio4.into_push_pull_output_in_state(PinState::Low); // reset pin
+    let dc = pins.gpio5.into_push_pull_output_in_state(PinState::Low); // dc pin
+                                                             //
     let spi_mosi = pins.gpio3.into_function::<hal::gpio::FunctionSpi>();
     let spi_sclk = pins.gpio2.into_function::<hal::gpio::FunctionSpi>();
     let spi = hal::spi::Spi::<_, _, _, 8>::new(pac.SPI0, (spi_mosi, spi_sclk));
     
     // Exchange the uninitialised SPI driver for an initialised one
-    let mut spi = spi.init(
+    let spi = spi.init(
         &mut pac.RESETS,
         clocks.peripheral_clock.freq(),
         16.MHz(),
         embedded_hal::spi::MODE_3,
     );
-    // spi.write(&[]),is_ok()
 
+    // display interface abstraction from SPI and DC
+    let di = SPIInterfaceNoCS::new(spi, dc);
+    
+    // create driver
+    let mut display = ST7789::new(di, rst, 240, 240);
+
+    // initialize
+    display.init(&mut delay).unwrap();
+    // set default orientation
+    display.set_orientation(Orientation::LandscapeSwapped).unwrap();
+
+    let raw_image_data = ImageRawLE::new(include_bytes!("../assets/ferris.raw"), 86);
+    let ferris = Image::new(&raw_image_data, Point::new(134, 8));
+
+    // draw image on black background
+    display.clear(Rgb565::BLACK).unwrap();
+    ferris.draw(&mut display).unwrap();
 
     // Enable ADC
     let mut adc = hal::Adc::new(pac.ADC, &mut pac.RESETS);
@@ -447,15 +474,16 @@ fn main() -> ! {
 
     // Configure GPIO25 as an output
     let mut led_pin = pins.gpio25.into_push_pull_output();
-    
+    led_pin.set_high().unwrap();
+
     // Move the cursor up and down every 200ms
     loop {
-        led_pin.set_low().unwrap();
+        //led_pin.set_low().unwrap();
 
         // busy-wait until the FIFO contains at least 4 samples:
         // while adc_fifo.len() < 4 {}
 
-        led_pin.set_high().unwrap();
+        //led_pin.set_high().unwrap();
 
         // fetch 4 values from the fifo
         // let adc_result_3 = adc_fifo.read();
@@ -517,7 +545,7 @@ fn main() -> ! {
             js_right_x: 1500,
             js_right_y: 0,
         };
-        
+
         push_input(xinput_report);
     }
     
