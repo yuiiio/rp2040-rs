@@ -42,6 +42,7 @@ use st7789::{Orientation, ST7789};
 pub mod hid {
     use usb_device::class_prelude::*;
     use usb_device::Result;
+    use packed_struct::prelude::*;
 
     pub const USB_CLASS_HID: u8 = 0x03;
 
@@ -59,42 +60,80 @@ pub mod hid {
     const REQ_SET_IDLE: u8 = 0x0a;
     const REQ_SET_PROTOCOL: u8 = 0x0b;
 
-    // https://docs.microsoft.com/en-us/windows-hardware/design/component-guidelines/mouse-collection-report-descriptor
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, Default, PackedStruct)]
+    #[packed_struct(endian = "lsb", size_bytes = "8", bit_numbering = "msb0")]
+    pub struct JoystickReport {
+        #[packed_field]
+        pub lx: u8,
+        #[packed_field]
+        pub ly: u8,
+        #[packed_field]
+        pub rx: u8,
+        #[packed_field]
+        pub ry: u8,
+        #[packed_field]
+        pub lz: u8,
+        #[packed_field]
+        pub rz: u8,
+        #[packed_field]
+        pub buttons1: u8,
+
+        // this 4 bits field pack to one byte,
+        // so reversed array order compared pre descriptor.
+        #[packed_field]
+        pub hat_switch: [bool; 4],
+        #[packed_field]
+        pub buttons2: [bool; 4],
+    }
+
     const REPORT_DESCR: &[u8] = &[
-        0x05, 0x01, // USAGE_PAGE (Generic Desktop)
-        0x09, 0x02, // USAGE (Mouse)
-        0xa1, 0x01, // COLLECTION (Application)
-        0x09, 0x01, //   USAGE (Pointer)
-        0xa1, 0x00, //   COLLECTION (Physical)
-        0x05, 0x09, //     USAGE_PAGE (Button)
-        0x19, 0x01, //     USAGE_MINIMUM (Button 1)
-        0x29, 0x03, //     USAGE_MAXIMUM (Button 3)
-        0x15, 0x00, //     LOGICAL_MINIMUM (0)
-        0x25, 0x01, //     LOGICAL_MAXIMUM (1)
-        0x95, 0x03, //     REPORT_COUNT (3)
-        0x75, 0x01, //     REPORT_SIZE (1)
-        0x81, 0x02, //     INPUT (Data,Var,Abs)
-        0x95, 0x01, //     REPORT_COUNT (1)
-        0x75, 0x05, //     REPORT_SIZE (5)
-        0x81, 0x03, //     INPUT (Cnst,Var,Abs)
-        0x05, 0x01, //     USAGE_PAGE (Generic Desktop)
-        0x09, 0x30, //     USAGE (X)
-        0x09, 0x31, //     USAGE (Y)
-        0x15, 0x81, //     LOGICAL_MINIMUM (-127)
-        0x25, 0x7f, //     LOGICAL_MAXIMUM (127)
-        0x75, 0x08, //     REPORT_SIZE (8)
-        0x95, 0x02, //     REPORT_COUNT (2)
-        0x81, 0x06, //     INPUT (Data,Var,Rel)
-        0xc0, //   END_COLLECTION
-        0xc0, // END_COLLECTION
+        0x05, 0x01, // Usage Page (Generic Desktop)         5,   1
+        0x09, 0x04, // Usage (Joystick)                     9,   4
+        0xa1, 0x01, // Collection (Application)             161, 1
+
+        0x09, 0x01, //   Usage Page (Pointer)               9,   1
+        0xa1, 0x00, //   Collection (Physical)              161, 0
+        0x09, 0x30, //     Usage (LX)                        9,   48
+        0x09, 0x31, //     Usage (LY)                        9,   49
+        0x09, 0x33, //     Usage (RX)                        9,   51
+        0x09, 0x34, //     Usage (RY)                        9,   52
+        0x09, 0x32, //     Usage (LZ)                        9,   50
+        0x09, 0x35, //     Usage (RZ)                        9,   53
+        0x15, 0x00, //     Logical Minimum (0)              21,  0
+        0x25, 0xff, //     Logical Maximum (255)            37,  255
+        0x75, 0x08, //     Report Size (8)                  117, 8
+        0x95, 0x06, //     Report count (6)                 149, 6,
+        0x81, 0x02, //     Input (Data, Variable, Absolute) 129, 2,
+        0xc0,       //   End Collection                     192,
+
+        0x05, 0x09, //   Usage Page (Button)                5,   9,
+        0x19, 0x01, //   Usage Minimum (1)                  25,  1,
+        0x29, 0x0c, //   Usage Maximum (12)                 41,  12,
+        0x15, 0x00, //   Logical Minimum (0)                21,  0
+        0x25, 0x01, //   Logical Maximum (1)                37,  1,
+        0x75, 0x01, //   Report Size (1)                    117, 1,
+        0x95, 0x0c, //   Report Count (12)                   149, 12,
+        0x81, 0x02, //   Input (Data, Variable, Absolute)   129, 2,
+
+
+        // ^ 8 + 4 bits 
+        // V 4 bits
+        // repack to 2 bytes. {8buttons}, {4buttons, HatSwitch}
+
+        /* Hat Switch */
+        0x05, 0x01,							/*   USAGE_PAGE (Generic Desktop) */
+        0x09, 0x39,							/*   USAGE (Hat switch) */
+        0x15, 0x01,							/*   LOGICAL_MINIMUM (1) */
+        0x25, 0x08,							/*   LOGICAL_MAXIMUM (8) */
+        0x95, 0x01,							/*   REPORT_COUNT (1) */
+        0x75, 0x04,							/*   REPORT_SIZE (4) */
+        0x81, 0x02,							/*   INPUT (Data,Var,Abs) */
+
+        0xc0,       // End Collection                       192
     ];
 
-    pub fn report(x: i8, y: i8) -> [u8; 3] {
-        [
-            0x00,    // button: none
-            x as u8, // x-axis
-            y as u8, // y-axis
-        ]
+    pub fn report(report: JoystickReport) -> [u8; 8] {
+        report.pack().unwrap()
     }
 
     pub struct HIDClass<'a, B: UsbBus> {
@@ -123,7 +162,7 @@ pub mod hid {
                 self.report_if,
                 USB_CLASS_HID,
                 USB_SUBCLASS_NONE,
-                USB_INTERFACE_MOUSE,
+                USB_INTERFACE_NONE,
             )?;
 
             let descr_len: u16 = REPORT_DESCR.len() as u16;
@@ -195,7 +234,7 @@ pub mod hid {
                 REQ_GET_REPORT => {
                     // USB host requests for report
                     // I'm not sure what should we do here, so just send empty report
-                    xfer.accept_with(&report(0, 0)).ok();
+                    xfer.accept_with(&[0 as u8; 8]).ok();
                 }
                 _ => {
                     xfer.reject().ok();
@@ -218,7 +257,7 @@ pub mod hid {
     }
 }
 
-use hid::HIDClass;
+use hid::{HIDClass, JoystickReport};
 
 /// The USB Device Driver (shared with the interrupt).
 static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
@@ -541,7 +580,6 @@ fn main() -> ! {
                 }
             };
 
-        /*
         let report = JoystickReport {
             lx: lx,
             ly: ly,
@@ -554,12 +592,7 @@ fn main() -> ! {
             hat_switch: hat_switch, // see DPAD_*
         };
 
-        push_input(xinput_report);
-        */
-
-        let hid_report: [i8; 2] = [0, -10];
-        
-        push_input(hid_report);
+        push_input(report);
     }
     
     // Stop free-running mode (the returned `adc` can be reused for future captures)
@@ -569,11 +602,11 @@ fn main() -> ! {
 /// Submit a new gamepad inpuit report to the USB stack.
 ///
 /// We do this with interrupts disabled, to avoid a race hazard with the USB IRQ.
-fn push_input(report: [i8; 2]) -> () {
+fn push_input(report: JoystickReport) -> () {
     critical_section::with(|_| unsafe {
         // Now interrupts are disabled, grab the global variable and, if
         // available, send it a HID report
-        USB_HID.as_mut().map(|hid| hid.write(&hid::report(report[0], report[1])))
+        USB_HID.as_mut().map(|hid| hid.write(&hid::report(report)))
     })
     .unwrap()
 }
