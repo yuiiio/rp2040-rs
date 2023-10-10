@@ -18,9 +18,6 @@ embedded-hal = { version = "0.2.7", features = ["unproven"] }
 cortex-m-rt = { version = "0.7.3"}
 critical-section = "1.1.2"
 
-packed_struct = { version = "0.10", default-features = false, features = ["serde"] }
-serde = { version = "1.0.152", default-features = false }
-
 fugit = "0.3.6"
 display-interface = "0.4"
 display-interface-spi = "0.4"

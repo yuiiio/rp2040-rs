@@ -39,25 +39,18 @@ use embedded_graphics::prelude::*;
 use st7789::{Orientation, ST7789};
 
 #[allow(unused)]
-pub mod xinput {
+pub mod hid {
     use usb_device::class_prelude::*;
     use usb_device::Result;
-    use packed_struct::prelude::*;
 
-    // just copied from a controller with Xinput support
-    pub const USB_XINPUT_VID: u16 = 0x045e;
-    pub const USB_XINPUT_PID: u16 = 0x028e;
-    const USB_CLASS_VENDOR: u8 = 0xff;
-    const USB_SUBCLASS_VENDOR: u8 = 0xff;
-    const USB_PROTOCOL_VENDOR: u8 = 0xff;
-    const USB_DEVICE_RELEASE: u16 = 0x0114;
+    pub const USB_CLASS_HID: u8 = 0x03;
 
-    const XINPUT_DESC_DESCTYPE_STANDARD: u8 = 0x21; // a common descriptor type for all xinput interfaces
-    const XINPUT_IFACE_SUBCLASS_STANDARD: u8 = 0x5D;
-    const XINPUT_IFACE_PROTO_IF0: u8 = 0x01;
+    const USB_SUBCLASS_NONE: u8 = 0x00;
+    const USB_SUBCLASS_BOOT: u8 = 0x01;
 
-    const XINPUT_EP_MAX_PACKET_SIZE: u16 = 0x20;
-    const XINPUT_RW_BUFFER_SIZE: usize = XINPUT_EP_MAX_PACKET_SIZE as usize;
+    const USB_INTERFACE_NONE: u8 = 0x00;
+    const USB_INTERFACE_KEYBOARD: u8 = 0x01;
+    const USB_INTERFACE_MOUSE: u8 = 0x02;
 
     const REQ_GET_REPORT: u8 = 0x01;
     const REQ_GET_IDLE: u8 = 0x02;
@@ -66,109 +59,56 @@ pub mod xinput {
     const REQ_SET_IDLE: u8 = 0x0a;
     const REQ_SET_PROTOCOL: u8 = 0x0b;
 
-    const XINPUT_DESC_IF0: &[u8] = &[
-        // for control interface
-        0x00, 0x01, 0x01, 0x25, // ???
-        0x81, // bEndpointAddress (IN, 1)
-        0x14, // bMaxDataSize
-        0x00, 0x00, 0x00, 0x00, 0x13, // ???
-        0x01, // bEndpointAddress (OUT, 1)
-        0x08, // bMaxDataSize
-        0x00, 0x00, // ???
+    // https://docs.microsoft.com/en-us/windows-hardware/design/component-guidelines/mouse-collection-report-descriptor
+    const REPORT_DESCR: &[u8] = &[
+        0x05, 0x01, // USAGE_PAGE (Generic Desktop)
+        0x09, 0x02, // USAGE (Mouse)
+        0xa1, 0x01, // COLLECTION (Application)
+        0x09, 0x01, //   USAGE (Pointer)
+        0xa1, 0x00, //   COLLECTION (Physical)
+        0x05, 0x09, //     USAGE_PAGE (Button)
+        0x19, 0x01, //     USAGE_MINIMUM (Button 1)
+        0x29, 0x03, //     USAGE_MAXIMUM (Button 3)
+        0x15, 0x00, //     LOGICAL_MINIMUM (0)
+        0x25, 0x01, //     LOGICAL_MAXIMUM (1)
+        0x95, 0x03, //     REPORT_COUNT (3)
+        0x75, 0x01, //     REPORT_SIZE (1)
+        0x81, 0x02, //     INPUT (Data,Var,Abs)
+        0x95, 0x01, //     REPORT_COUNT (1)
+        0x75, 0x05, //     REPORT_SIZE (5)
+        0x81, 0x03, //     INPUT (Cnst,Var,Abs)
+        0x05, 0x01, //     USAGE_PAGE (Generic Desktop)
+        0x09, 0x30, //     USAGE (X)
+        0x09, 0x31, //     USAGE (Y)
+        0x15, 0x81, //     LOGICAL_MINIMUM (-127)
+        0x25, 0x7f, //     LOGICAL_MAXIMUM (127)
+        0x75, 0x08, //     REPORT_SIZE (8)
+        0x95, 0x02, //     REPORT_COUNT (2)
+        0x81, 0x06, //     INPUT (Data,Var,Rel)
+        0xc0, //   END_COLLECTION
+        0xc0, // END_COLLECTION
     ];
 
-    /// Store the input states of the controller
-    #[derive(PackedStruct, Default, Debug, PartialEq)]
-    #[packed_struct(endian = "lsb", bit_numbering = "msb0")]
-    pub struct XinputControlReport {
-        // byte zero
-        #[packed_field(bits = "0")]
-        pub thumb_click_right: bool,
-        #[packed_field(bits = "1")]
-        pub thumb_click_left: bool,
-        #[packed_field(bits = "2")]
-        pub button_view: bool,
-        #[packed_field(bits = "3")]
-        pub button_menu: bool,
-        #[packed_field(bits = "4")]
-        pub dpad_right: bool,
-        #[packed_field(bits = "5")]
-        pub dpad_left: bool,
-        #[packed_field(bits = "6")]
-        pub dpad_down: bool,
-        #[packed_field(bits = "7")]
-        pub dpad_up: bool,
-        // byte one
-        #[packed_field(bits = "8")]
-        pub button_y: bool,
-        #[packed_field(bits = "9")]
-        pub button_x: bool,
-        #[packed_field(bits = "10")]
-        pub button_b: bool,
-        #[packed_field(bits = "11")]
-        pub button_a: bool,
-        // #[packed_field(bits = "12")]
-        // pub reserved: bool,
-        #[packed_field(bits = "13")]
-        pub xbox_button: bool,
-        #[packed_field(bits = "14")]
-        pub shoulder_right: bool,
-        #[packed_field(bits = "15")]
-        pub shoulder_left: bool,
-        // others
-        #[packed_field(bytes = "2")]
-        pub trigger_left: u8,
-        #[packed_field(bytes = "3")]
-        pub trigger_right: u8,
-        #[packed_field(bytes = "4..=5")]
-        pub js_left_x: i16,
-        #[packed_field(bytes = "6..=7")]
-        pub js_left_y: i16,
-        #[packed_field(bytes = "8..=9")]
-        pub js_right_x: i16,
-        #[packed_field(bytes = "10..=11")]
-        pub js_right_y: i16,
-    }
-
-    pub fn report(xinput_report: XinputControlReport) -> [u8; 20] {
-        let packed = xinput_report.pack().unwrap();
-
+    pub fn report(x: i8, y: i8) -> [u8; 3] {
         [
-            0x00, // packet type id
-            0x14, // packet length (20)
-            packed[0],
-            packed[1],
-            packed[2],
-            packed[3],
-            packed[4],
-            packed[5],
-            packed[6],
-            packed[7],
-            packed[8],
-            packed[9],
-            packed[10],
-            packed[11],
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
+            0x00,    // button: none
+            x as u8, // x-axis
+            y as u8, // y-axis
         ]
     }
 
-    pub struct XINPUTClass<'a, B: UsbBus> {
+    pub struct HIDClass<'a, B: UsbBus> {
         report_if: InterfaceNumber,
         report_ep: EndpointIn<'a, B>,
     }
 
-    impl<B: UsbBus> XINPUTClass<'_, B> {
-        /// Creates a new XINPUTClass with the provided UsbBus and max_packet_size in bytes. For
+    impl<B: UsbBus> HIDClass<'_, B> {
+        /// Creates a new HIDClass with the provided UsbBus and max_packet_size in bytes. For
         /// full-speed devices, max_packet_size has to be one of 8, 16, 32 or 64.
-        pub fn new(alloc: &UsbBusAllocator<B>) -> XINPUTClass<'_, B> {
-            XINPUTClass {
+        pub fn new(alloc: &UsbBusAllocator<B>) -> HIDClass<'_, B> {
+            HIDClass {
                 report_if: alloc.interface(),
-                report_ep: alloc.interrupt(XINPUT_EP_MAX_PACKET_SIZE, 4), // (capacity, poll_interval)
+                report_ep: alloc.interrupt(8, 10),
             }
         }
 
@@ -177,20 +117,27 @@ pub mod xinput {
         }
     }
 
-    impl<B: UsbBus> UsbClass<B> for XINPUTClass<'_, B> {
+    impl<B: UsbBus> UsbClass<B> for HIDClass<'_, B> {
         fn get_configuration_descriptors(&self, writer: &mut DescriptorWriter) -> Result<()> {
-            writer.interface_alt(
+            writer.interface(
                 self.report_if,
-                0x00,
-                USB_CLASS_VENDOR,
-                XINPUT_IFACE_SUBCLASS_STANDARD,
-                XINPUT_IFACE_PROTO_IF0,
-                None,
+                USB_CLASS_HID,
+                USB_SUBCLASS_NONE,
+                USB_INTERFACE_MOUSE,
             )?;
 
+            let descr_len: u16 = REPORT_DESCR.len() as u16;
             writer.write(
-                XINPUT_DESC_DESCTYPE_STANDARD,
-                XINPUT_DESC_IF0,
+                0x21,
+                &[
+                    0x01,                   // bcdHID
+                    0x01,                   // bcdHID
+                    0x00,                   // bContryCode
+                    0x01,                   // bNumDescriptors
+                    0x22,                   // bDescriptorType
+                    descr_len as u8,        // wDescriptorLength
+                    (descr_len >> 8) as u8, // wDescriptorLength
+                ],
             )?;
 
             writer.endpoint(&self.report_ep)?;
@@ -198,7 +145,6 @@ pub mod xinput {
             Ok(())
         }
 
-        /*
         fn control_in(&mut self, xfer: ControlIn<B>) {
             let req = xfer.request();
 
@@ -207,16 +153,16 @@ pub mod xinput {
                     (control::Recipient::Interface, control::Request::GET_DESCRIPTOR) => {
                         let (dtype, _index) = req.descriptor_type_index();
                         if dtype == 0x21 {
-                            // XINPUT descriptor
+                            // HID descriptor
                             cortex_m::asm::bkpt();
-                            let descr_len: u16 = XINPUT_DESC_IF0.len() as u16;
+                            let descr_len: u16 = REPORT_DESCR.len() as u16;
 
-                            // XINPUT descriptor
+                            // HID descriptor
                             let descr = &[
                                 0x09,                   // length
                                 0x21,                   // descriptor type
-                                0x01,                   // bcdXINPUT
-                                0x01,                   // bcdXINPUT
+                                0x01,                   // bcdHID
+                                0x01,                   // bcdHID
                                 0x00,                   // bCountryCode
                                 0x01,                   // bNumDescriptors
                                 0x22,                   // bDescriptorType
@@ -228,7 +174,7 @@ pub mod xinput {
                             return;
                         } else if dtype == 0x22 {
                             // Report descriptor
-                            xfer.accept_with(XINPUT_DESC_IF0).ok();
+                            xfer.accept_with(REPORT_DESCR).ok();
                             return;
                         }
                     }
@@ -249,7 +195,7 @@ pub mod xinput {
                 REQ_GET_REPORT => {
                     // USB host requests for report
                     // I'm not sure what should we do here, so just send empty report
-                    //xfer.accept_with(&report(0, 0)).ok();
+                    xfer.accept_with(&report(0, 0)).ok();
                 }
                 _ => {
                     xfer.reject().ok();
@@ -269,11 +215,10 @@ pub mod xinput {
 
             xfer.reject().ok();
         }
-        */
     }
 }
 
-use xinput::{XINPUTClass, USB_XINPUT_VID, USB_XINPUT_PID, XinputControlReport};
+use hid::HIDClass;
 
 /// The USB Device Driver (shared with the interrupt).
 static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
@@ -282,7 +227,7 @@ static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
 static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
 
 /// The USB Human Interface Device Driver (shared with the interrupt).
-static mut USB_XINPUT: Option<XINPUTClass<hal::usb::UsbBus>> = None;
+static mut USB_HID: Option<HIDClass<hal::usb::UsbBus>> = None;
 
 /// The linker will place this boot block at the start of our program image. We
 /// need this to help the ROM bootloader get our code up and running.
@@ -295,6 +240,17 @@ pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GENERIC_03H;
 /// External high-speed crystal on the Raspberry Pi Pico board is 12 MHz. Adjust
 /// if your board has a different frequency
 const XTAL_FREQ_HZ: u32 = 12_000_000u32;
+
+// DPAD 1~8 axis clock wise from up.
+const DPAD_UP: [bool; 4]= [false, false, false, true];
+const DPAD_DOWN: [bool; 4]= [false, true, false, true];
+const DPAD_RIGHT: [bool; 4]= [false, false, true, true];
+const DPAD_LEFT: [bool; 4]= [false, true, true, true];
+
+const DPAD_DOWN_LEFT: [bool; 4] = [false, true, true, false];
+const DPAD_DOWN_RIGHT: [bool; 4] = [false, true, false, false];
+const DPAD_UP_RIGHT: [bool; 4] = [false, false, true, false];
+const DPAD_UP_LEFT: [bool; 4] = [true, false, false, false];
 
 /// Entry point to our bare-metal application.
 ///
@@ -342,22 +298,18 @@ fn main() -> ! {
     // reference exists!
     let bus_ref = unsafe { USB_BUS.as_ref().unwrap() };
 
-    let usb_xinput = XINPUTClass::new(bus_ref);
+    let usb_hid = HIDClass::new(bus_ref);
     unsafe {
         // Note (safety): This is safe as interrupts haven't been started yet
-        USB_XINPUT = Some(usb_xinput);
+        USB_HID = Some(usb_hid);
     }
 
     //https://pid.codes
-    let usb_dev = UsbDeviceBuilder::new(bus_ref, UsbVidPid(USB_XINPUT_VID, USB_XINPUT_PID))
-        .manufacturer("atbjyk")
-        .product("Rusty Xinput gamepad")
+    let usb_dev = UsbDeviceBuilder::new(bus_ref, UsbVidPid(0x1209, 0x0001))
+        .manufacturer("usbd-human-interface-device")
+        .product("Rusty joystick")
         .serial_number("TEST")
-        .max_packet_size_0(32) // should change 16, 32,, when over report size over 8 byte ?
-        .device_release(0x0114)
-        .device_protocol(0xff)
-        .device_class(0xff)
-        .device_sub_class(0xff)
+        .max_packet_size_0(8) // should change 16, 32,, when over report size over 8 byte ?
         .build();
     unsafe {
         // Note (safety): This is safe as interrupts haven't been started yet
@@ -517,36 +469,97 @@ fn main() -> ! {
             rz = 255;
         }
 
-        let xinput_report = XinputControlReport {
-            // byte zero
-            thumb_click_right: in_pin_r3.is_low().unwrap(),
-            thumb_click_left: in_pin_l3.is_low().unwrap(),
-            button_view: in_pin_overview.is_low().unwrap(),
-            button_menu: in_pin_menu.is_low().unwrap(),
-            dpad_right: in_pin_d_right.is_low().unwrap(),
-            dpad_left: in_pin_d_left.is_low().unwrap(),
-            dpad_down: in_pin_d_down.is_low().unwrap(),
-            dpad_up: in_pin_d_up.is_low().unwrap(),
-            // byte one
-            button_y: in_pin_y.is_low().unwrap(),
-            button_x: in_pin_x.is_low().unwrap(),
-            button_b: in_pin_b.is_low().unwrap(),
-            button_a: in_pin_a.is_low().unwrap(),
-            // #[packed_field(bits = "12")]
-            // pub reserved: bool,
-            xbox_button: false,
-            shoulder_right: in_pin_rt.is_low().unwrap(),
-            shoulder_left: in_pin_lt.is_low().unwrap(),
-            // others
-            trigger_left: lz,
-            trigger_right: rz,
-            js_left_x: -1500,
-            js_left_y: 0,
-            js_right_x: 1500,
-            js_right_y: 0,
+        let mut buttons1 = 0b00000000;
+
+        if in_pin_a.is_low().unwrap() {
+            buttons1 |= 0b00000001;
+        }
+        if in_pin_b.is_low().unwrap() {
+            buttons1 |= 0b00000010;
+        }
+        if in_pin_x.is_low().unwrap() {
+            buttons1 |= 0b00000100;
+        }
+        if in_pin_y.is_low().unwrap() {
+            buttons1 |= 0b00001000;
+        }
+        if in_pin_lt.is_low().unwrap() {
+            buttons1 |= 0b00010000;
+        }
+        if in_pin_rt.is_low().unwrap() {
+            buttons1 |= 0b00100000;
+        }
+        if in_pin_overview.is_low().unwrap() {
+            buttons1 |= 0b01000000;
+        }
+        if in_pin_menu.is_low().unwrap() {
+            buttons1 |= 0b10000000;
+        }
+
+        let mut buttons2  = [false; 4];
+        if in_pin_l3.is_low().unwrap() {
+            buttons2[1] = true;
+        }
+        if in_pin_r3.is_low().unwrap() {
+            buttons2[2] = true;
+        }
+
+        // up and down, left and right should not press at same time
+        // hat_switch(dpad) expect only 8 axis info.
+        let hat_switch: [bool; 4] =
+            if in_pin_d_up.is_low().unwrap() {
+                if in_pin_d_right.is_low().unwrap() {
+                    DPAD_UP_RIGHT
+                } else {
+                    if in_pin_d_left.is_low().unwrap() {
+                        DPAD_UP_LEFT
+                    } else {
+                        DPAD_UP
+                    }
+                }
+            } else {
+                if in_pin_d_down.is_low().unwrap() {
+                    if in_pin_d_right.is_low().unwrap() {
+                        DPAD_DOWN_RIGHT
+                    } else {
+                        if in_pin_d_left.is_low().unwrap() {
+                            DPAD_DOWN_LEFT
+                        } else {
+                            DPAD_DOWN
+                        }
+                    }
+                } else {
+                    if in_pin_d_right.is_low().unwrap() {
+                        DPAD_RIGHT
+                    } else {
+                        if in_pin_d_left.is_low().unwrap() {
+                            DPAD_LEFT
+                        } else {
+                            [false; 4]
+                        }
+                    }
+                }
+            };
+
+        /*
+        let report = JoystickReport {
+            lx: lx,
+            ly: ly,
+            rx: rx,
+            ry: ry,
+            lz: lz, // 0~255 expect analog trigger but, rp2040 has only 4 analogin so
+            rz: rz, // use binary value 0, 1 and map to 0 , 255.
+            buttons1: buttons1, // high [menu, overview, RT, LT, Y, X, B, A] low
+            buttons2: buttons2, // high [?, R3, L3, ?] low
+            hat_switch: hat_switch, // see DPAD_*
         };
 
         push_input(xinput_report);
+        */
+
+        let hid_report: [i8; 2] = [0, -10];
+        
+        push_input(hid_report);
     }
     
     // Stop free-running mode (the returned `adc` can be reused for future captures)
@@ -556,11 +569,11 @@ fn main() -> ! {
 /// Submit a new gamepad inpuit report to the USB stack.
 ///
 /// We do this with interrupts disabled, to avoid a race hazard with the USB IRQ.
-fn push_input(report: XinputControlReport) -> () {
+fn push_input(report: [i8; 2]) -> () {
     critical_section::with(|_| unsafe {
         // Now interrupts are disabled, grab the global variable and, if
-        // available, send it a XINPUT report
-        USB_XINPUT.as_mut().map(|xinput| xinput.write(&xinput::report(report)))
+        // available, send it a HID report
+        USB_HID.as_mut().map(|hid| hid.write(&hid::report(report[0], report[1])))
     })
     .unwrap()
 }
@@ -572,8 +585,8 @@ fn push_input(report: XinputControlReport) -> () {
 unsafe fn USBCTRL_IRQ() {
     // Handle USB request
     let usb_dev = USB_DEVICE.as_mut().unwrap();
-    let usb_xinput = USB_XINPUT.as_mut().unwrap();
-    usb_dev.poll(&mut [usb_xinput]);
+    let usb_hid = USB_HID.as_mut().unwrap();
+    usb_dev.poll(&mut [usb_hid]);
 }
 
 // End of file
