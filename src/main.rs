@@ -401,8 +401,8 @@ fn main() -> ! {
     // set default orientation
     display.set_orientation(Orientation::LandscapeSwapped).unwrap();
 
-    let raw_image_data = ImageRawLE::new(include_bytes!("../assets/ferris.raw"), 86);
-    let ferris = Image::new(&raw_image_data, Point::new(134, 8));
+    let raw_image_data = ImageRawLE::new(include_bytes!("../assets/ferris.raw"), 240);
+    let ferris = Image::new(&raw_image_data, Point::new(80, 0));
 
     // draw image on black background
     display.clear(Rgb565::BLACK).unwrap();

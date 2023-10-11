@@ -6,5 +6,10 @@ cargo build
 cargo run --release
 ```
 
+generate rgb565 rawfile using
+```
+ffmpeg -vcodec png -i image.png -vcodec rawvideo -f rawvideo -pix_fmt rgb565 image.raw
+```
+
 # LICENSE
 GPL-3.0
