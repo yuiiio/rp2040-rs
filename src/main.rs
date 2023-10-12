@@ -207,37 +207,17 @@ pub mod xinput {
             Ok(())
         }
 
-        /*
         fn control_in(&mut self, xfer: ControlIn<B>) {
             let req = xfer.request();
 
-            if req.request_type == control::RequestType::Standard {
+            if req.request_type == control::RequestType::Vendor {
                 match (req.recipient, req.request) {
-                    (control::Recipient::Interface, control::Request::GET_DESCRIPTOR) => {
-                        let (dtype, _index) = req.descriptor_type_index();
-                        if dtype == 0x21 {
-                            // XINPUT descriptor
-                            cortex_m::asm::bkpt();
-                            let descr_len: u16 = XINPUT_DESC_IF0.len() as u16;
-
-                            // XINPUT descriptor
-                            let descr = &[
-                                0x09,                   // length
-                                0x21,                   // descriptor type
-                                0x01,                   // bcdXINPUT
-                                0x01,                   // bcdXINPUT
-                                0x00,                   // bCountryCode
-                                0x01,                   // bNumDescriptors
-                                0x22,                   // bDescriptorType
-                                descr_len as u8,        // wDescriptorLength
-                                (descr_len >> 8) as u8, // wDescriptorLength
-                            ];
-
-                            xfer.accept_with(descr).ok();
-                            return;
-                        } else if dtype == 0x22 {
-                            // Report descriptor
-                            xfer.accept_with(XINPUT_DESC_IF0).ok();
+                    (control::Recipient::Interface, control::Request::CLEAR_FEATURE) => { //CLEAR_FEATURE=>
+                                                                                          //0x01
+                        if req.value == 0x100 && req.index == 0x00 { // see
+                                                                     // linux/drivers/input/joystick/xpad.c#L1734
+                                                                     // usb_control_msg_recv
+                            xfer.accept_with(&[0 as u8; 20]).ok();
                             return;
                         }
                     }
@@ -246,26 +226,9 @@ pub mod xinput {
                     }
                 };
             }
-
-            if !(req.request_type == control::RequestType::Class
-                && req.recipient == control::Recipient::Interface
-                && req.index == u8::from(self.report_if) as u16)
-            {
-                return;
-            }
-
-            match req.request {
-                REQ_GET_REPORT => {
-                    // USB host requests for report
-                    // I'm not sure what should we do here, so just send empty report
-                    //xfer.accept_with(&report(0, 0)).ok();
-                }
-                _ => {
-                    xfer.reject().ok();
-                }
-            }
         }
 
+        /*
         fn control_out(&mut self, xfer: ControlOut<B>) {
             let req = xfer.request();
 
