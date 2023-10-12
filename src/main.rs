@@ -42,6 +42,8 @@ use st7789::{Orientation, ST7789};
 pub mod xinput {
     use usb_device::class_prelude::*;
     use usb_device::Result;
+    use usb_device::UsbDirection;
+    use usb_device::endpoint::EndpointAddress;
     use packed_struct::prelude::*;
 
     // just copied from a controller with Xinput support
@@ -159,7 +161,8 @@ pub mod xinput {
 
     pub struct XINPUTClass<'a, B: UsbBus> {
         report_if: InterfaceNumber,
-        report_ep: EndpointIn<'a, B>,
+        report_ep_in: EndpointIn<'a, B>,
+        report_ep_out: EndpointOut<'a, B>,
     }
 
     impl<B: UsbBus> XINPUTClass<'_, B> {
@@ -168,12 +171,17 @@ pub mod xinput {
         pub fn new(alloc: &UsbBusAllocator<B>) -> XINPUTClass<'_, B> {
             XINPUTClass {
                 report_if: alloc.interface(),
-                report_ep: alloc.interrupt(XINPUT_EP_MAX_PACKET_SIZE, 4), // (capacity, poll_interval)
+
+                report_ep_in: alloc.alloc(Some(EndpointAddress::from_parts(0x01, UsbDirection::In)),
+                                EndpointType::Interrupt, XINPUT_EP_MAX_PACKET_SIZE, 4).expect("alloc_ep failed"), // (capacity, poll_interval)
+                
+                report_ep_out: alloc.alloc(Some(EndpointAddress::from_parts(0x01, UsbDirection::Out)),
+                                EndpointType::Interrupt, XINPUT_EP_MAX_PACKET_SIZE, 8).expect("alloc_ep failed"), // (capacity, poll_interval)
             }
         }
 
         pub fn write(&mut self, data: &[u8]) {
-            self.report_ep.write(data).ok();
+            self.report_ep_in.write(data).ok();
         }
     }
 
@@ -193,7 +201,8 @@ pub mod xinput {
                 XINPUT_DESC_IF0,
             )?;
 
-            writer.endpoint(&self.report_ep)?;
+            writer.endpoint(&self.report_ep_in)?;
+            writer.endpoint(&self.report_ep_out)?;
 
             Ok(())
         }
