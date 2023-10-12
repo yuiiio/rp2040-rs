@@ -132,7 +132,7 @@ pub mod xinput {
         pub js_right_y: i16,
     }
 
-    pub fn report(xinput_report: XinputControlReport) -> [u8; 20] {
+    pub fn report(xinput_report: &XinputControlReport) -> [u8; 20] {
         let packed = xinput_report.pack().unwrap();
 
         [
@@ -180,7 +180,7 @@ pub mod xinput {
             }
         }
 
-        pub fn write(&mut self, data: &[u8]) {
+        pub fn write_control(&mut self, data: &[u8]) {
             self.report_ep_in.write(data).ok();
         }
     }
@@ -217,7 +217,7 @@ pub mod xinput {
                         if req.value == 0x100 && req.index == 0x00 { // see
                                                                      // linux/drivers/input/joystick/xpad.c#L1734
                                                                      // usb_control_msg_recv
-                            xfer.accept_with(&[0 as u8; 20]).ok();
+                            xfer.accept_with_static(&[0 as u8; 20]).ok();
                             return;
                         }
                     }
@@ -518,7 +518,7 @@ fn main() -> ! {
             js_right_y: 0,
         };
         
-        push_input(xinput_report);
+        push_input(&xinput_report);
     }
     
     // Stop free-running mode (the returned `adc` can be reused for future captures)
@@ -528,11 +528,11 @@ fn main() -> ! {
 /// Submit a new gamepad inpuit report to the USB stack.
 ///
 /// We do this with interrupts disabled, to avoid a race hazard with the USB IRQ.
-fn push_input(report: XinputControlReport) -> () {
+fn push_input(report: &XinputControlReport) -> () {
     critical_section::with(|_| unsafe {
         // Now interrupts are disabled, grab the global variable and, if
         // available, send it a XINPUT report
-        USB_XINPUT.as_mut().map(|xinput| xinput.write(&xinput::report(report)))
+        USB_XINPUT.as_mut().map(|xinput| xinput.write_control(&xinput::report(report)))
     })
     .unwrap()
 }
