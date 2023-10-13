@@ -336,10 +336,12 @@ fn main() -> ! {
         USB_DEVICE = Some(usb_dev);
     }
 
+    /*
     unsafe {
         // Enable the USB interrupt
         pac::NVIC::unmask(hal::pac::Interrupt::USBCTRL_IRQ);
     };
+    */
 
     let core = pac::CorePeripherals::take().unwrap();
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
@@ -448,8 +450,17 @@ fn main() -> ! {
     let mut led_pin = pins.gpio25.into_push_pull_output();
     led_pin.set_high().unwrap();
 
-    // Move the cursor up and down every 200ms
+    let mut toggle: bool = false;
     loop {
+        if in_pin_overview.is_low().unwrap() && in_pin_menu.is_low().unwrap(){
+            display.clear(Rgb565::WHITE).unwrap();
+            toggle = true;
+        } else {
+            if toggle == true {
+                ferris.draw(&mut display).unwrap();
+                toggle = false;
+            }
+        }
         //led_pin.set_low().unwrap();
 
         // busy-wait until the FIFO contains at least 4 samples:
@@ -468,18 +479,18 @@ fn main() -> ! {
         let adc_result_1: u16 = adc.read(&mut adc_pin_1).unwrap();
         let adc_result_0: u16 = adc.read(&mut adc_pin_0).unwrap();
 
-        // 12 bit to 9bit to 8bit
-        // norm is 127
-        let adc_0: u16 = adc_result_0 >> 3;
-        let adc_1: u16 = adc_result_1 >> 3;
-        let adc_2: u16 = adc_result_2 >> 3;
-        let adc_3: u16 = adc_result_3 >> 3;
+        // u12 bit to i16 bit
+        // norm is 0
+        let adc_0: u16 = adc_result_0;
+        let adc_1: u16 = adc_result_1;
+        let adc_2: u16 = adc_result_2;
+        let adc_3: u16 = adc_result_3;
 
         // clamp
-        let lx: u8 = (if adc_0 >> 7 == 0 { 0 } else { if adc_0 & 0b110000000 == 0b110000000 { 255 } else { adc_0 - 127 } }) as u8;
-        let ly: u8 = (if adc_1 >> 7 == 0 { 0 } else { if adc_1 & 0b110000000 == 0b110000000 { 255 } else { adc_1 - 127 } }) as u8;
-        let rx: u8 = (if adc_2 >> 7 == 0 { 0 } else { if adc_2 & 0b110000000 == 0b110000000 { 255 } else { adc_2 - 127 } }) as u8;
-        let ry: u8 = (if adc_3 >> 7 == 0 { 0 } else { if adc_3 & 0b110000000 == 0b110000000 { 255 } else { adc_3 - 127 } }) as u8;
+        let lx: i16 = ((adc_0 as i32 - 2048) << 4) as i16;
+        let ly: i16 = ((adc_1 as i32 - 2048) << 4) as i16 * -1;
+        let rx: i16 = ((adc_2 as i32 - 2048) << 4) as i16;
+        let ry: i16 = ((adc_3 as i32 - 2048) << 4) as i16 * -1;
 
         let (mut lz, mut rz): (u8, u8) = (0, 0);
         if in_pin_lz.is_low().unwrap() {
@@ -512,13 +523,19 @@ fn main() -> ! {
             // others
             trigger_left: lz,
             trigger_right: rz,
-            js_left_x: -1500,
-            js_left_y: 0,
-            js_right_x: 1500,
-            js_right_y: 0,
+            js_left_x: lx,
+            js_left_y: ly,
+            js_right_x: rx,
+            js_right_y: ry,
         };
         
         push_input(&xinput_report);
+
+        unsafe {
+            let usb_dev = USB_DEVICE.as_mut().unwrap();
+            let usb_xinput = USB_XINPUT.as_mut().unwrap();
+            usb_dev.poll(&mut [usb_xinput]);
+        }
     }
     
     // Stop free-running mode (the returned `adc` can be reused for future captures)
