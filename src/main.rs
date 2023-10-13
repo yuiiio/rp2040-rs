@@ -529,7 +529,7 @@ fn main() -> ! {
 ///
 /// We do this with interrupts disabled, to avoid a race hazard with the USB IRQ.
 fn push_input(report: &XinputControlReport) -> () {
-    critical_section::with(|_| unsafe {
+    cortex_m::interrupt::free(|_| unsafe {
         // Now interrupts are disabled, grab the global variable and, if
         // available, send it a XINPUT report
         USB_XINPUT.as_mut().map(|xinput| xinput.write_control(&xinput::report(report)))
