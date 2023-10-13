@@ -1,4 +1,4 @@
-# rp2040-rs
+# rp2040-xinput-rs
 
 ```
 rustup target add thumbv6m-none-eabi

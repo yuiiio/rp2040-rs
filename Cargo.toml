@@ -1,5 +1,5 @@
 [package]
-name = "rp2040-rs"
+name = "rp2040-xinput-rs"
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0"

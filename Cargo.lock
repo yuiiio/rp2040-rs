@@ -538,7 +538,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rp2040-rs"
+name = "rp2040-xinput-rs"
 version = "0.1.0"
 dependencies = [
  "cortex-m",
