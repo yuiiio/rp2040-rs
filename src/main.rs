@@ -285,19 +285,12 @@ fn main() -> ! {
         let rx: i16 = ((adc_2 as i16 - 2048) << 4) as i16;
         let ry: i16 = ((adc_3 as i16 - 2048) << 4) as i16 * -1;
 
-        // clamp
-        let lx: i16 = lx.clamp(-21844, 21844);
-        let ly: i16 = ly.clamp(-21844, 21844);
-        let rx: i16 = rx.clamp(-21844, 21844);
-        let ry: i16 = ry.clamp(-21844, 21844);
-
-        // scale
+        // scale and clamp
         // * 1.5 ( 1 + 1/2 ) = 3/2
-        // x * 3/2 = 32,767, => x = 21844...
-        let lx: i16 = lx + (lx >> 1); 
-        let ly: i16 = ly + (ly >> 1);
-        let rx: i16 = rx + (rx >> 1);
-        let ry: i16 = ry + (ry >> 1);
+        let lx: i16 = lx.saturating_add(lx >> 1); 
+        let ly: i16 = ly.saturating_add(ly >> 1);
+        let rx: i16 = rx.saturating_add(rx >> 1);
+        let ry: i16 = ry.saturating_add(ry >> 1);
 
         let (mut lz, mut rz): (u8, u8) = (0, 0);
         if in_pin_lz.is_low().unwrap() {
