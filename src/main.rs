@@ -275,15 +275,15 @@ fn main() -> ! {
 
         // u12 bit to i16 bit
         // norm is 0
-        let adc_0: u16 = adc_result_0;
-        let adc_1: u16 = adc_result_1;
-        let adc_2: u16 = adc_result_2;
-        let adc_3: u16 = adc_result_3;
+        let adc_0: u16 = adc_result_0 << 4;
+        let adc_1: u16 = adc_result_1 << 4;
+        let adc_2: u16 = adc_result_2 << 4;
+        let adc_3: u16 = adc_result_3 << 4;
 
-        let lx: i16 = ((adc_0 as i16 - 2048) << 4) as i16;
-        let ly: i16 = ((adc_1 as i16 - 2048) << 4) as i16 * -1;
-        let rx: i16 = ((adc_2 as i16 - 2048) << 4) as i16;
-        let ry: i16 = ((adc_3 as i16 - 2048) << 4) as i16 * -1;
+        let lx: i16 = (adc_0 ^ 0b1000000000000000) as i16;
+        let ly: i16 = (adc_1 ^ 0b1000000000000000) as i16 * -1;
+        let rx: i16 = (adc_2 ^ 0b1000000000000000) as i16;
+        let ry: i16 = (adc_3 ^ 0b1000000000000000) as i16 * -1;
 
         // scale and clamp
         // * 1.5 ( 1 + 1/2 ) = 3/2
