@@ -281,9 +281,9 @@ fn main() -> ! {
         let adc_3: u16 = adc_result_3 << 4;
 
         let lx: i16 = (adc_0 ^ 0b1000000000000000) as i16;
-        let ly: i16 = (adc_1 ^ 0b1000000000000000) as i16 * -1;
+        let ly: i16 = (adc_1 ^ 0b0111111111111111) as i16;
         let rx: i16 = (adc_2 ^ 0b1000000000000000) as i16;
-        let ry: i16 = (adc_3 ^ 0b1000000000000000) as i16 * -1;
+        let ry: i16 = (adc_3 ^ 0b0111111111111111) as i16;
 
         // scale and clamp
         // * 1.5 ( 1 + 1/2 ) = 3/2
