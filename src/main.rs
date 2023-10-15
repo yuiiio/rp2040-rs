@@ -39,7 +39,9 @@ use embedded_graphics::prelude::*;
 use st7789::{Orientation, ST7789};
 
 mod xinput;
-use xinput::{XINPUTClass, USB_XINPUT_VID, USB_XINPUT_PID, XinputControlReport};
+use xinput::{XINPUTClass, XinputControlReport, XINPUT_EP_MAX_PACKET_SIZE,
+USB_XINPUT_VID, USB_XINPUT_PID,
+USB_CLASS_VENDOR, USB_SUBCLASS_VENDOR, USB_PROTOCOL_VENDOR, USB_DEVICE_RELEASE};
 
 /// The USB Device Driver (shared with the interrupt).
 static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
@@ -119,11 +121,11 @@ fn main() -> ! {
         .manufacturer("atbjyk")
         .product("Rusty Xinput gamepad")
         .serial_number("TEST")
-        .max_packet_size_0(32) // should change 16, 32,, when over report size over 8 byte ?
-        .device_release(0x0114)
-        .device_protocol(0xff)
-        .device_class(0xff)
-        .device_sub_class(0xff)
+        .max_packet_size_0(XINPUT_EP_MAX_PACKET_SIZE as u8) // should change 16, 32,, when over report size over 8 byte ?
+        .device_release(USB_DEVICE_RELEASE)
+        .device_protocol(USB_PROTOCOL_VENDOR)
+        .device_class(USB_CLASS_VENDOR)
+        .device_sub_class(USB_SUBCLASS_VENDOR)
         .build();
     unsafe {
         // Note (safety): This is safe as interrupts haven't been started yet
@@ -244,8 +246,9 @@ fn main() -> ! {
     let mut led_pin = pins.gpio25.into_push_pull_output();
     led_pin.set_high().unwrap();
 
-    let mut toggle: bool = false;
+    // let mut toggle: bool = false;
     loop {
+        /* debug
         if in_pin_overview.is_low().unwrap() && in_pin_menu.is_low().unwrap(){
             display.clear(Rgb565::WHITE).unwrap();
             toggle = true;
@@ -255,6 +258,7 @@ fn main() -> ! {
                 toggle = false;
             }
         }
+        */
         //led_pin.set_low().unwrap();
 
         // busy-wait until the FIFO contains at least 4 samples:
@@ -349,7 +353,7 @@ fn push_input(report: &XinputControlReport) -> () {
     cortex_m::interrupt::free(|_| unsafe {
         // Now interrupts are disabled, grab the global variable and, if
         // available, send it a XINPUT report
-        USB_XINPUT.as_mut().map(|xinput| xinput.write_control(&xinput::report(report)))
+        USB_XINPUT.as_mut().map(|xinput| xinput.write_control(report))
     })
     .unwrap()
 }

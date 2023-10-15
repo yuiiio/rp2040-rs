@@ -8,24 +8,16 @@ use packed_struct::prelude::*;
 // just copied from a controller with Xinput support
 pub const USB_XINPUT_VID: u16 = 0x045e;
 pub const USB_XINPUT_PID: u16 = 0x028e;
-const USB_CLASS_VENDOR: u8 = 0xff;
-const USB_SUBCLASS_VENDOR: u8 = 0xff;
-const USB_PROTOCOL_VENDOR: u8 = 0xff;
-const USB_DEVICE_RELEASE: u16 = 0x0114;
+pub const USB_CLASS_VENDOR: u8 = 0xff;
+pub const USB_SUBCLASS_VENDOR: u8 = 0xff;
+pub const USB_PROTOCOL_VENDOR: u8 = 0xff;
+pub const USB_DEVICE_RELEASE: u16 = 0x0114;
 
 const XINPUT_DESC_DESCTYPE_STANDARD: u8 = 0x21; // a common descriptor type for all xinput interfaces
 const XINPUT_IFACE_SUBCLASS_STANDARD: u8 = 0x5D;
 const XINPUT_IFACE_PROTO_IF0: u8 = 0x01;
 
-const XINPUT_EP_MAX_PACKET_SIZE: u16 = 0x20;
-const XINPUT_RW_BUFFER_SIZE: usize = XINPUT_EP_MAX_PACKET_SIZE as usize;
-
-const REQ_GET_REPORT: u8 = 0x01;
-const REQ_GET_IDLE: u8 = 0x02;
-const REQ_GET_PROTOCOL: u8 = 0x03;
-const REQ_SET_REPORT: u8 = 0x09;
-const REQ_SET_IDLE: u8 = 0x0a;
-const REQ_SET_PROTOCOL: u8 = 0x0b;
+pub const XINPUT_EP_MAX_PACKET_SIZE: u16 = 0x20;
 
 const XINPUT_DESC_IF0: &[u8] = &[
     // for control interface
@@ -91,33 +83,6 @@ pub struct XinputControlReport {
     pub js_right_y: i16,
 }
 
-    pub fn report(xinput_report: &XinputControlReport) -> [u8; 20] {
-        let packed = xinput_report.pack().unwrap();
-
-        [
-            0x00, // packet type id
-            0x14, // packet length (20)
-            packed[0],
-            packed[1],
-            packed[2],
-            packed[3],
-            packed[4],
-            packed[5],
-            packed[6],
-            packed[7],
-            packed[8],
-            packed[9],
-            packed[10],
-            packed[11],
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            ]
-    }
-
 pub struct XINPUTClass<'a, B: UsbBus> {
     report_if: InterfaceNumber,
     report_ep_in: EndpointIn<'a, B>,
@@ -139,8 +104,32 @@ impl<B: UsbBus> XINPUTClass<'_, B> {
         }
     }
 
-    pub fn write_control(&mut self, data: &[u8]) {
-        self.report_ep_in.write(data).ok();
+    pub fn write_control(&mut self, xinput_report: &XinputControlReport) {
+        let packed = xinput_report.pack().unwrap();
+        let data: [u8; 20] = 
+            [
+            0x00, // packet type id
+            0x14, // packet length (20)
+            packed[0],
+            packed[1],
+            packed[2],
+            packed[3],
+            packed[4],
+            packed[5],
+            packed[6],
+            packed[7],
+            packed[8],
+            packed[9],
+            packed[10],
+            packed[11],
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            ];
+        self.report_ep_in.write(&data).ok();
     }
 }
 
